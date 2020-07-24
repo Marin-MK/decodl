@@ -1,12 +1,7 @@
-﻿using SixLabors.ImageSharp.PixelFormats;
-using System;
-using System.Collections.Generic;
+﻿using System;
 using System.IO;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Xml.XPath;
 
-namespace Decodl
+namespace decodl
 {
     public static class Utility
     {

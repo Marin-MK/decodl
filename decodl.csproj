@@ -8,15 +8,4 @@
     <Platforms>x64</Platforms>
   </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="BigGustave" Version="1.0.1" />
-    <PackageReference Include="SixLabors.ImageSharp" Version="1.0.0-rc0003" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Reference Include="Pngcs">
-      <HintPath>bin\x64\Debug\netcoreapp3.1\Pngcs.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-
 </Project>
