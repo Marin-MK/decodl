@@ -2,10 +2,18 @@
 
   <PropertyGroup>
     <OutputType>Library</OutputType>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
     <StartupObject></StartupObject>
     <Configurations>Debug</Configurations>
     <Platforms>x64</Platforms>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <Authors>Marijn Herrebout</Authors>
+    <Copyright>Marijn Herrebout</Copyright>
+    <RepositoryUrl>https://github.com/Marin-MK/decodl</RepositoryUrl>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Optimize>True</Optimize>
   </PropertyGroup>
 
 </Project>
