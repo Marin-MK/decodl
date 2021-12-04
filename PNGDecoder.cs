@@ -930,24 +930,6 @@ public class PNGDecoder
         this.Chunks.Add(Chunk);
     }
 
-    public enum ColorTypes
-    {
-        Grayscale = 0,
-        RGB = 2,
-        Indexed = 3,
-        GrayscaleAlpha = 4,
-        RGBA = 6
-    }
-
-    public enum FilterType
-    {
-        None = 0,
-        Sub = 1,
-        Up = 2,
-        Average = 3,
-        Paeth = 4
-    }
-
     protected class PNGChunk
     {
         public PNGDecoder Decoder;
@@ -1137,9 +1119,27 @@ public class PNGDecoder
             return $"({Red}, {Green}, {Blue}, {Alpha})";
         }
     }
+}
 
-    protected class PNGException : Exception
-    {
-        public PNGException(string Message) : base(Message) { }
-    }
+public enum ColorTypes : byte
+{
+    Grayscale = 0,
+    RGB = 2,
+    Indexed = 3,
+    GrayscaleAlpha = 4,
+    RGBA = 6
+}
+
+public enum FilterType : byte
+{
+    None = 0,
+    Sub = 1,
+    Up = 2,
+    Average = 3,
+    Paeth = 4
+}
+
+public class PNGException : Exception
+{
+    public PNGException(string Message) : base(Message) { }
 }
