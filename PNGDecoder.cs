@@ -1098,48 +1098,4 @@ public class PNGDecoder
     }
 
     protected class PNGEndChunk : PNGChunk { }
-
-    protected class Color
-    {
-        public byte Red;
-        public byte Green;
-        public byte Blue;
-        public byte Alpha;
-
-        public Color(byte Red, byte Green, byte Blue, byte Alpha = 255)
-        {
-            this.Red = Red;
-            this.Green = Green;
-            this.Blue = Blue;
-            this.Alpha = Alpha;
-        }
-
-        public override string ToString()
-        {
-            return $"({Red}, {Green}, {Blue}, {Alpha})";
-        }
-    }
-}
-
-public enum ColorTypes : byte
-{
-    Grayscale = 0,
-    RGB = 2,
-    Indexed = 3,
-    GrayscaleAlpha = 4,
-    RGBA = 6
-}
-
-public enum FilterType : byte
-{
-    None = 0,
-    Sub = 1,
-    Up = 2,
-    Average = 3,
-    Paeth = 4
-}
-
-public class PNGException : Exception
-{
-    public PNGException(string Message) : base(Message) { }
 }

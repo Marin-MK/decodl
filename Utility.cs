@@ -92,3 +92,71 @@ public static class Utility
         Byte = Result;
     }
 }
+
+public enum ColorTypes : byte
+{
+    Grayscale = 0,
+    RGB = 2,
+    Indexed = 3,
+    GrayscaleAlpha = 4,
+    RGBA = 6
+}
+
+public enum FilterType : byte
+{
+    None = 0,
+    Sub = 1,
+    Up = 2,
+    Average = 3,
+    Paeth = 4
+}
+
+public class PNGException : Exception
+{
+    public PNGException(string Message) : base(Message) { }
+}
+
+public class Color
+{
+    public byte Red;
+    public byte Green;
+    public byte Blue;
+    public byte Alpha;
+
+    public Color(byte Red, byte Green, byte Blue, byte Alpha = 255)
+    {
+        this.Red = Red;
+        this.Green = Green;
+        this.Blue = Blue;
+        this.Alpha = Alpha;
+    }
+
+    public long Distance(Color c)
+    {
+        return (this.Red - c.Red) * (this.Red - c.Red) +
+               (this.Green - c.Green) * (this.Green - c.Green) +
+               (this.Blue - c.Blue) * (this.Blue - c.Blue) +
+               (this.Alpha - c.Alpha) * (this.Alpha - c.Alpha);
+    }
+
+    public override bool Equals(object obj)
+    {
+        if (this == obj) return true;
+        if (obj is Color)
+        {
+            Color c = (Color) obj;
+            return this.Red == c.Red && this.Green == c.Green && this.Blue == c.Blue && this.Alpha == c.Alpha;
+        }
+        return false;
+    }
+
+    public override int GetHashCode()
+    {
+        return this.Alpha << 24 + this.Blue << 16 + this.Green << 8 + this.Red;
+    }
+
+    public override string ToString()
+    {
+        return $"({Red}, {Green}, {Blue}, {Alpha})";
+    }
+}
