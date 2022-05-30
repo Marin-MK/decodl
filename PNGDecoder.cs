@@ -84,7 +84,10 @@ public class PNGDecoder
         }
         else if (ColorType == ColorTypes.Grayscale)
         {
-            if (BitDepth == 8) ConvertGray8(RawBytes);
+            if (BitDepth == 1) ConvertGray1(RawBytes);
+            else if (BitDepth == 2) ConvertGray2(RawBytes);
+            else if (BitDepth == 4) ConvertGray4(RawBytes);
+            else if (BitDepth == 8) ConvertGray8(RawBytes);
             else if (BitDepth == 16) ConvertGray16(RawBytes);
             else throw new PNGException($"Unhandled Bit Depth {BitDepth}");
         }
@@ -99,6 +102,7 @@ public class PNGDecoder
             if (BitDepth == 8) ConvertPLTE8(RawBytes);
             else if (BitDepth == 4) ConvertPLTE4(RawBytes);
             else if (BitDepth == 2) ConvertPLTE2(RawBytes);
+            else if (BitDepth == 1) ConvertPLTE1(RawBytes);
             else throw new PNGException($"Unhandled Bit Depth {BitDepth}");
         }
         else throw new PNGException($"Unhandled Color Type {ColorType}");
@@ -342,67 +346,6 @@ public class PNGDecoder
         }
     }
 
-    protected void ConvertGray4(byte[] RawBytes)
-    {
-        for (int y = 0; y < Height; y++)
-        {
-            int filter = RawBytes[y * (Width / 2 + 1)];
-            for (int x = 0; x < Width; x++)
-            {
-                int pxidx = y * Width * 4 + x * 4;
-                int realidx = y * (Width / 2 + 1) + 1 + x / 2;
-                byte LeftByte = 0;
-                byte UpperByte = 0;
-                byte newvalue = 0;
-                byte mask = (byte)(x % 2 == 0 ? 0xF0 : 0x0F);
-                byte shift = (byte)(x % 2 == 0 ? 4 : 0);
-                if (filter == 0)
-                {
-                    newvalue = (byte)(RawBytes[realidx] & mask >> shift);
-                }
-                else if (filter == 1)
-                {
-                    if (x > 0) LeftByte = Bytes[pxidx - 4];
-                    newvalue = (byte)((RawBytes[realidx] & mask >> shift + LeftByte) % 256);
-                }
-                else if (filter == 2)
-                {
-                    if (y > 0) UpperByte = Bytes[pxidx - Width * 4];
-                    newvalue = (byte)((RawBytes[realidx] & mask >> shift + UpperByte) % 256);
-                }
-                else if (filter == 3)
-                {
-                    if (x > 0) LeftByte = Bytes[pxidx - 4];
-                    if (y > 0) UpperByte = Bytes[pxidx - Width * 4];
-                    newvalue = (byte)((RawBytes[realidx] & mask >> shift + (byte)Math.Floor((LeftByte + UpperByte) / 2d)) % 256);
-                }
-                else if (filter == 4)
-                {
-                    if (x > 0) LeftByte = Bytes[pxidx - 4];
-                    if (y > 0) UpperByte = Bytes[pxidx - Width * 4];
-                    byte UpperLeftByte = 0;
-                    if (x > 0 && y > 0) UpperLeftByte = Bytes[pxidx - Width * 4 - 4];
-
-                    int Base = LeftByte + UpperByte - UpperLeftByte;
-                    int LeftDiff = Math.Abs(Base - LeftByte);
-                    int UpperDiff = Math.Abs(Base - UpperByte);
-                    int UpperLeftDiff = Math.Abs(Base - UpperLeftByte);
-
-                    byte Paeth = 0;
-                    if (LeftDiff <= UpperDiff && LeftDiff <= UpperLeftDiff) Paeth = LeftByte;
-                    else if (UpperDiff <= UpperLeftDiff) Paeth = UpperByte;
-                    else Paeth = UpperLeftByte;
-                    newvalue = (byte)((RawBytes[realidx] & mask >> shift + Paeth) % 256);
-                }
-                else throw new PNGException($"PNG invalid filter type {filter}.");
-                Bytes[pxidx] = Palette[newvalue].Red;
-                Bytes[pxidx + 1] = Palette[newvalue].Green;
-                Bytes[pxidx + 2] = Palette[newvalue].Blue;
-                Bytes[pxidx + 3] = (byte)(newvalue == AlphaGreyValue ? 0 : 255);
-            }
-        }
-    }
-
     protected void ConvertGray8(byte[] RawBytes)
     {
         for (int y = 0; y < Height; y++)
@@ -458,6 +401,73 @@ public class PNGDecoder
                 Bytes[pxidx + 1] = newvalue;
                 Bytes[pxidx + 2] = newvalue;
                 Bytes[pxidx + 3] = (byte)(newvalue == AlphaGreyValue ? 0 : 255);
+            }
+        }
+    }
+
+    protected void ConvertGray4(byte[] RawBytes)
+    {
+        FilterBytes(2, RawBytes);
+        int scanlinewidth = Width / 2 + 1;
+        for (int y = 0; y < Height; y++)
+        {
+            for (int x = 0; x < Width; x++)
+            {
+                int pxidx = y * Width * 4 + x * 4;
+                int realidx = y * scanlinewidth + 1 + x / 2;
+                byte mask = (byte)(x % 2 == 0 ? 0xF0 : 0x0F);
+                byte shift = (byte)(x % 2 == 0 ? 4 : 0);
+                byte value = (byte)((RawBytes[realidx] & mask) >> shift);
+                byte gvalue = (byte)Math.Round(value / 15d * 255d);
+                Bytes[pxidx] = gvalue;
+                Bytes[pxidx + 1] = gvalue;
+                Bytes[pxidx + 2] = gvalue;
+                Bytes[pxidx + 3] = (byte)(gvalue == AlphaGreyValue ? 0 : 255);
+            }
+        }
+    }
+
+    protected void ConvertGray2(byte[] RawBytes)
+    {
+        FilterBytes(4, RawBytes);
+        int scanlinewidth = Width / 4 + 1;
+        for (int y = 0; y < Height; y++)
+        {
+            for (int x = 0; x < Width; x++)
+            {
+                int pxidx = y * Width * 4 + x * 4;
+                int realidx = y * scanlinewidth + 1 + x / 4;
+                byte mask = (byte)(x % 2 == 0 ? 0xF0 : 0x0F);
+                byte shift = (byte)(x % 2 == 0 ? 4 : 0);
+                byte value = (byte)((RawBytes[realidx] & mask) >> shift);
+                byte gvalue = (byte)Math.Round(value / 3d * 255d);
+                Bytes[pxidx] = gvalue;
+                Bytes[pxidx + 1] = gvalue;
+                Bytes[pxidx + 2] = gvalue;
+                Bytes[pxidx + 3] = (byte)(gvalue == AlphaGreyValue ? 0 : 255);
+            }
+        }
+    }
+
+    protected void ConvertGray1(byte[] RawBytes)
+    {
+        FilterBytes(8, RawBytes);
+        int scanlinewidth = Width / 8 + 1;
+        for (int y = 0; y < Height; y++)
+        {
+            for (int x = 0; x < Width; x++)
+            {
+                int pxidx = y * Width * 4 + x * 4;
+                int realidx = y * scanlinewidth + 1 + x / 8;
+                byte xoff = (byte)(x % 8);
+                byte mask = (byte)(1 << (7 - xoff));
+                byte shift = (byte)(7 - xoff);
+                byte value = (byte)((RawBytes[realidx] & mask) >> shift);
+                byte gvalue = (byte) (value == 0 ? 0 : 255);
+                Bytes[pxidx] = gvalue;
+                Bytes[pxidx + 1] = gvalue;
+                Bytes[pxidx + 2] = gvalue;
+                Bytes[pxidx + 3] = (byte)(gvalue == AlphaGreyValue ? 0 : 255);
             }
         }
     }
@@ -659,182 +669,133 @@ public class PNGDecoder
 
     protected void ConvertPLTE8(byte[] RawBytes)
     {
+        FilterBytes(1, RawBytes);
+        int scanlinewidth = Width + 1;
         for (int y = 0; y < Height; y++)
         {
-            int filter = RawBytes[y * (Width + 1)];
             for (int x = 0; x < Width; x++)
             {
                 int pxidx = y * Width * 4 + x * 4;
-                int realidx = y * (Width + 1) + 1 + x;
-                byte LeftByte = 0;
-                byte UpperByte = 0;
-                byte newvalue = 0;
-                if (filter == 0)
-                {
-                    newvalue = RawBytes[realidx];
-                }
-                else if (filter == 1)
-                {
-                    if (x > 0) LeftByte = Bytes[pxidx - 4];
-                    newvalue = (byte)((RawBytes[realidx] + LeftByte) % 256);
-                }
-                else if (filter == 2)
-                {
-                    if (y > 0) UpperByte = Bytes[pxidx - Width * 4];
-                    newvalue = (byte)((RawBytes[realidx] + UpperByte) % 256);
-                }
-                else if (filter == 3)
-                {
-                    if (x > 0) LeftByte = Bytes[pxidx - 4];
-                    if (y > 0) UpperByte = Bytes[pxidx - Width * 4];
-                    newvalue = (byte)((RawBytes[realidx] + (byte)Math.Floor((LeftByte + UpperByte) / 2d)) % 256);
-                }
-                else if (filter == 4)
-                {
-                    if (x > 0) LeftByte = Bytes[pxidx - 4];
-                    if (y > 0) UpperByte = Bytes[pxidx - Width * 4];
-                    byte UpperLeftByte = 0;
-                    if (x > 0 && y > 0) UpperLeftByte = Bytes[pxidx - Width * 4 - 4];
-
-                    int Base = LeftByte + UpperByte - UpperLeftByte;
-                    int LeftDiff = Math.Abs(Base - LeftByte);
-                    int UpperDiff = Math.Abs(Base - UpperByte);
-                    int UpperLeftDiff = Math.Abs(Base - UpperLeftByte);
-
-                    byte Paeth = 0;
-                    if (LeftDiff <= UpperDiff && LeftDiff <= UpperLeftDiff) Paeth = LeftByte;
-                    else if (UpperDiff <= UpperLeftDiff) Paeth = UpperByte;
-                    else Paeth = UpperLeftByte;
-                    newvalue = (byte)((RawBytes[realidx] + Paeth) % 256);
-                }
-                else throw new PNGException($"PNG invalid filter type {filter}.");
-                Bytes[pxidx] = Palette[newvalue].Red;
-                Bytes[pxidx + 1] = Palette[newvalue].Green;
-                Bytes[pxidx + 2] = Palette[newvalue].Blue;
-                Bytes[pxidx + 3] = AlphaPalette == null || newvalue >= AlphaPalette.Count ? (byte)255 : AlphaPalette[newvalue];
+                int realidx = y * scanlinewidth + 1 + x;
+                byte value = RawBytes[realidx];
+                Bytes[pxidx] = Palette[value].Red;
+                Bytes[pxidx + 1] = Palette[value].Green;
+                Bytes[pxidx + 2] = Palette[value].Blue;
+                Bytes[pxidx + 3] = AlphaPalette == null || value >= AlphaPalette.Count ? (byte)255 : AlphaPalette[value];
             }
         }
     }
 
     protected void ConvertPLTE4(byte[] RawBytes)
     {
+        FilterBytes(2, RawBytes);
+        int scanlinewidth = Width / 2 + 1;
         for (int y = 0; y < Height; y++)
         {
-            int filter = RawBytes[y * (Width / 2 + 1)];
             for (int x = 0; x < Width; x++)
             {
                 int pxidx = y * Width * 4 + x * 4;
-                int realidx = y * (Width / 2 + 1) + 1 + x / 2;
-                byte LeftByte = 0;
-                byte UpperByte = 0;
-                byte newvalue = 0;
+                int realidx = y * scanlinewidth + 1 + x / 2;
                 byte mask = (byte)(x % 2 == 0 ? 0xF0 : 0x0F);
                 byte shift = (byte)(x % 2 == 0 ? 4 : 0);
-                if (filter == 0)
-                {
-                    newvalue = (byte)(RawBytes[realidx] & mask >> shift);
-                }
-                else if (filter == 1)
-                {
-                    if (x > 0) LeftByte = Bytes[pxidx - 4];
-                    newvalue = (byte)((RawBytes[realidx] & mask >> shift + LeftByte) % 256);
-                }
-                else if (filter == 2)
-                {
-                    if (y > 0) UpperByte = Bytes[pxidx - Width * 4];
-                    newvalue = (byte)((RawBytes[realidx] & mask >> shift + UpperByte) % 256);
-                }
-                else if (filter == 3)
-                {
-                    if (x > 0) LeftByte = Bytes[pxidx - 4];
-                    if (y > 0) UpperByte = Bytes[pxidx - Width * 4];
-                    newvalue = (byte)((RawBytes[realidx] & mask >> shift + (byte)Math.Floor((LeftByte + UpperByte) / 2d)) % 256);
-                }
-                else if (filter == 4)
-                {
-                    if (x > 0) LeftByte = Bytes[pxidx - 4];
-                    if (y > 0) UpperByte = Bytes[pxidx - Width * 4];
-                    byte UpperLeftByte = 0;
-                    if (x > 0 && y > 0) UpperLeftByte = Bytes[pxidx - Width * 4 - 4];
-
-                    int Base = LeftByte + UpperByte - UpperLeftByte;
-                    int LeftDiff = Math.Abs(Base - LeftByte);
-                    int UpperDiff = Math.Abs(Base - UpperByte);
-                    int UpperLeftDiff = Math.Abs(Base - UpperLeftByte);
-
-                    byte Paeth = 0;
-                    if (LeftDiff <= UpperDiff && LeftDiff <= UpperLeftDiff) Paeth = LeftByte;
-                    else if (UpperDiff <= UpperLeftDiff) Paeth = UpperByte;
-                    else Paeth = UpperLeftByte;
-                    newvalue = (byte)((RawBytes[realidx] & mask >> shift + Paeth) % 256);
-                }
-                else throw new PNGException($"PNG invalid filter type {filter}.");
-                Bytes[pxidx] = Palette[newvalue].Red;
-                Bytes[pxidx + 1] = Palette[newvalue].Green;
-                Bytes[pxidx + 2] = Palette[newvalue].Blue;
-                Bytes[pxidx + 3] = AlphaPalette == null || newvalue >= AlphaPalette.Count ? (byte)255 : AlphaPalette[newvalue];
+                byte value = (byte)((RawBytes[realidx] & mask) >> shift);
+                Bytes[pxidx] = Palette[value].Red;
+                Bytes[pxidx + 1] = Palette[value].Green;
+                Bytes[pxidx + 2] = Palette[value].Blue;
+                Bytes[pxidx + 3] = AlphaPalette == null || value >= AlphaPalette.Count ? (byte) 255 : AlphaPalette[value];
             }
         }
     }
 
     protected void ConvertPLTE2(byte[] RawBytes)
     {
+        FilterBytes(4, RawBytes);
+        int scanlinewidth = Width / 4 + 1;
         for (int y = 0; y < Height; y++)
         {
-            int filter = RawBytes[y * (Width / 4 + 1)];
             for (int x = 0; x < Width; x++)
             {
                 int pxidx = y * Width * 4 + x * 4;
-                int realidx = y * (Width / 4 + 1) + 1 + x / 4;
-                byte LeftByte = 0;
-                byte UpperByte = 0;
-                byte newvalue = 0;
+                int realidx = y * scanlinewidth + 1 + x / 4;
                 byte xoff = (byte)(x % 4);
                 byte mask = (byte)(xoff == 0 ? 0xFF : xoff == 1 ? 0x3F : xoff == 2 ? 0x0F : 0x03);
                 byte shift = (byte)(xoff == 0 ? 6 : xoff == 1 ? 4 : xoff == 2 ? 2 : 0);
+                byte value = (byte)((RawBytes[realidx] & mask) >> shift);
+                Bytes[pxidx] = Palette[value].Red;
+                Bytes[pxidx + 1] = Palette[value].Green;
+                Bytes[pxidx + 2] = Palette[value].Blue;
+                Bytes[pxidx + 3] = AlphaPalette == null || value >= AlphaPalette.Count ? (byte)255 : AlphaPalette[value];
+            }
+        }
+    }
+
+    protected void ConvertPLTE1(byte[] RawBytes)
+    {
+        FilterBytes(8, RawBytes);
+        int scanlinewidth = Width / 8 + 1;
+        for (int y = 0; y < Height; y++)
+        {
+            for (int x = 0; x < Width; x++)
+            {
+                int pxidx = y * Width * 4 + x * 4;
+                int realidx = y * scanlinewidth + 1 + x / 8;
+                byte xoff = (byte)(x % 8);
+                byte mask = (byte)(1 << (7 - xoff));
+                byte shift = (byte)(7 - xoff);
+                byte value = (byte)((RawBytes[realidx] & mask) >> shift);
+                Bytes[pxidx] = Palette[value].Red;
+                Bytes[pxidx + 1] = Palette[value].Green;
+                Bytes[pxidx + 2] = Palette[value].Blue;
+                Bytes[pxidx + 3] = AlphaPalette == null || value >= AlphaPalette.Count ? (byte)255 : AlphaPalette[value];
+            }
+        }
+    }
+
+    protected void FilterBytes(int SamplesPerByte, byte[] RawBytes)
+    {
+        int scanlinewidth = Width / SamplesPerByte + 1;
+        for (int y = 0; y < Height; y++)
+        {
+            int filter = RawBytes[y * scanlinewidth];
+            for (int x = 0; x < Width / SamplesPerByte; x++)
+            {
+                int idx = y * scanlinewidth + x + 1;
+                byte left = x > 0 ? RawBytes[idx - 1] : (byte) 0;
+                byte up = y > 0 ? RawBytes[idx - scanlinewidth] : (byte) 0;
+                byte upleft = x > 0 && y > 0 ? RawBytes[idx - scanlinewidth - 1] : (byte) 0;
+                byte value = RawBytes[idx];
+                byte newvalue = 0;
                 if (filter == 0)
                 {
-                    newvalue = (byte)(RawBytes[realidx] & mask >> shift);
+                    newvalue = value;
                 }
                 else if (filter == 1)
                 {
-                    if (x > 0) LeftByte = Bytes[pxidx - 4];
-                    newvalue = (byte)((RawBytes[realidx] & mask >> shift + LeftByte) % 256);
+                    newvalue = (byte)((value + left) % 256);
                 }
                 else if (filter == 2)
                 {
-                    if (y > 0) UpperByte = Bytes[pxidx - Width * 4];
-                    newvalue = (byte)((RawBytes[realidx] & mask >> shift + UpperByte) % 256);
+                    newvalue = (byte)((value + up) % 256);
                 }
                 else if (filter == 3)
                 {
-                    if (x > 0) LeftByte = Bytes[pxidx - 4];
-                    if (y > 0) UpperByte = Bytes[pxidx - Width * 4];
-                    newvalue = (byte)((RawBytes[realidx] & mask >> shift + (byte)Math.Floor((LeftByte + UpperByte) / 2d)) % 256);
+                    newvalue = (byte)((value + (byte)Math.Floor((left + up) / 2d)) % 256);
                 }
                 else if (filter == 4)
                 {
-                    if (x > 0) LeftByte = Bytes[pxidx - 4];
-                    if (y > 0) UpperByte = Bytes[pxidx - Width * 4];
-                    byte UpperLeftByte = 0;
-                    if (x > 0 && y > 0) UpperLeftByte = Bytes[pxidx - Width * 4 - 4];
-
-                    int Base = LeftByte + UpperByte - UpperLeftByte;
-                    int LeftDiff = Math.Abs(Base - LeftByte);
-                    int UpperDiff = Math.Abs(Base - UpperByte);
-                    int UpperLeftDiff = Math.Abs(Base - UpperLeftByte);
+                    int Base = left + up - upleft;
+                    int LeftDiff = Math.Abs(Base - left);
+                    int UpperDiff = Math.Abs(Base - up);
+                    int UpperLeftDiff = Math.Abs(Base - upleft);
 
                     byte Paeth = 0;
-                    if (LeftDiff <= UpperDiff && LeftDiff <= UpperLeftDiff) Paeth = LeftByte;
-                    else if (UpperDiff <= UpperLeftDiff) Paeth = UpperByte;
-                    else Paeth = UpperLeftByte;
-                    newvalue = (byte)((RawBytes[realidx] & mask >> shift + Paeth) % 256);
+                    if (LeftDiff <= UpperDiff && LeftDiff <= UpperLeftDiff) Paeth = left;
+                    else if (UpperDiff <= UpperLeftDiff) Paeth = up;
+                    else Paeth = upleft;
+                    newvalue = (byte)((value + Paeth) % 256);
                 }
                 else throw new PNGException($"PNG invalid filter type {filter}.");
-                Bytes[pxidx] = Palette[newvalue].Red;
-                Bytes[pxidx + 1] = Palette[newvalue].Green;
-                Bytes[pxidx + 2] = Palette[newvalue].Blue;
-                Bytes[pxidx + 3] = AlphaPalette == null || newvalue >= AlphaPalette.Count ? (byte)255 : AlphaPalette[newvalue];
+                RawBytes[idx] = newvalue;
             }
         }
     }
@@ -909,14 +870,14 @@ public class PNGDecoder
                 return new PNGChunk();
         }
     }
-
+    
     protected void DecodeChunk()
     {
         uint Length = Utility.ReadUInt32BE(Stream);
         string Type = "";
         for (int i = 0; i < 4; i++)
         {
-            Type += (char)Stream.ReadByte();
+            Type += (char) Stream.ReadByte();
         }
         PNGChunk Chunk = CreateChunk(this.Chunks.Count + 1, Type);
         Chunk.Decoder = this;
@@ -963,7 +924,7 @@ public class PNGDecoder
 
         public virtual void PostParse()
         {
-            if (Stream.BaseStream.Position - StartPos < Length || Stream.BaseStream.Position - StartPos > Length)
+            if (false)//Stream.BaseStream.Position - StartPos < Length || Stream.BaseStream.Position - StartPos > Length)
             {
                 throw new PNGException($"PNG Chunk has a length of {Length} bytes, but {Stream.BaseStream.Position - StartPos} were read.");
             }
