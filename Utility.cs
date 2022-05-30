@@ -11,7 +11,7 @@ public static class Utility
         for (int i = 0; i < 4; i++)
         {
             byte Byte = BinaryReader.ReadByte();
-            Result = Result + Byte << (3 - i) * 8;
+            Result += (uint) Byte << (3 - i) * 8;
         }
         return Result;
     }
@@ -22,7 +22,7 @@ public static class Utility
         for (int i = 0; i < 2; i++)
         {
             byte Byte = BinaryReader.ReadByte();
-            Result = (ushort)(Result + (Byte << (1 - i) * 8));
+            Result += (ushort) (Byte << (1 - i) * 8);
         }
         return Result;
     }
@@ -33,7 +33,7 @@ public static class Utility
         for (int i = 0; i < 4; i++)
         {
             byte Byte = BinaryReader.ReadByte();
-            Result = Result + Byte << (3 - i) * 8;
+            Result += Byte << (3 - i) * 8;
         }
         return Result;
     }
@@ -44,7 +44,7 @@ public static class Utility
         for (int i = 0; i < 2; i++)
         {
             byte Byte = BinaryReader.ReadByte();
-            Result = (short)(Result + (Byte << (1 - i) * 8));
+            Result += (short) (Byte << (1 - i) * 8);
         }
         return Result;
     }
