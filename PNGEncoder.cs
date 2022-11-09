@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace decodl;
 
@@ -19,6 +20,7 @@ public unsafe class PNGEncoder
 
     List<Color> Palette = new List<Color>();
     Dictionary<Color, Color> PaletteReductions = new Dictionary<Color, Color>();
+    List<(string Header, string Data)> CustomChunks = new List<(string Header, string Data)>();
 
     /// <summary>
     /// Whether to read the input data as RGBA or as ABGR.
@@ -77,6 +79,13 @@ public unsafe class PNGEncoder
         this.Height = Height;
     }
 
+    public void AddCustomChunk(string Header, string Data)
+    {
+        if (Header.Length != 4) throw new PNGException("Header must be 4 characters long.");
+        if (Header[0] < 'a' || Header[0] > 'z') throw new PNGException("Header does not start with lower-case latin character");
+        CustomChunks.Add((Header, Data));
+    }
+
     public void Encode(string Filename)
     {
         if (!AdaptiveFiltering && FixedFilter == null) throw new PNGException("If adaptive filtering is disabled, a fixed filter must be set.");
@@ -119,6 +128,15 @@ public unsafe class PNGEncoder
                 trns.Dispose();
             }
         }
+
+        CustomChunks.ForEach(c =>
+        {
+            string hdr = c.Item1;
+            string dat = c.Item2;
+            PNGCompressedDataChunk chnk = new PNGCompressedDataChunk(bw, hdr, Compress(Encoding.Default.GetBytes(dat)));
+            chnk.Write();
+            chnk.Dispose();
+        });
 
         // Write IDAT chunk
         PNGDataChunk data = new PNGDataChunk(bw, datastream);
@@ -487,10 +505,10 @@ public unsafe class PNGEncoder
 
     class PNGChunk : IDisposable
     {
-        private BinaryWriter FileWriter;
-
+        protected BinaryWriter FileWriter;
         protected BinaryWriter DataWriter;
         protected MemoryStream DataStream;
+        protected string ChunkType;
 
         public PNGChunk(string ChunkType, BinaryWriter FileWriter)
         {
@@ -498,6 +516,7 @@ public unsafe class PNGEncoder
             this.DataStream = new MemoryStream();
             this.DataWriter = new BinaryWriter(DataStream);
             this.DataWriter.Write(ChunkType.ToCharArray());
+            this.ChunkType = ChunkType;
         }
 
         public virtual void Write()
@@ -529,6 +548,34 @@ public unsafe class PNGEncoder
             DataWriter.Write(CompressionMethod);
             DataWriter.Write(FilterMethod);
             DataWriter.Write(InterlaceMethod);
+        }
+    }
+
+    class PNGCompressedDataChunk : PNGChunk
+    {
+        public PNGCompressedDataChunk(BinaryWriter FileWriter, string Header, MemoryStream Data)
+            : base(Header, FileWriter)
+        {
+            Data.CopyTo(DataStream);   
+        }
+    }
+
+    class PNGUncompressedDataChunk : PNGChunk
+    {
+        byte[] ByteData;
+
+        public PNGUncompressedDataChunk(BinaryWriter FileWriter, string Header, string Data)
+            : base(Header, FileWriter)
+        {
+            ByteData = Encoding.Default.GetBytes(Data);
+        }
+
+        public override void Write()
+        {
+            FileWriter.Write(UInt32ToBE((uint) ByteData.Length)); // Data length - 4 header bytes
+            FileWriter.Write(ChunkType);
+            FileWriter.Write(ByteData);
+            FileWriter.Write(UInt32ToBE(Crc32Algorithm.Compute(ByteData)));
         }
     }
 

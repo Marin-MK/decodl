@@ -60,6 +60,17 @@ public class PNGDecoder
         }
     }
 
+    public byte[] GetChunk(string Header, bool Decompress)
+    {
+        PNGChunk chunk = this.Chunks.Find(c => c.Type == Header);
+        if (chunk is not PNGUnknownChunk) throw new Exception("This chunk is already known.");
+        PNGUnknownChunk c = (PNGUnknownChunk) chunk;
+        byte[] Data = c.Data;
+        if (!Decompress) return Data;
+        MemoryStream stream = new MemoryStream(Data);
+        return DecompressData(stream);
+    }
+
     protected void DecodePNG()
     {
         while (Stream.BaseStream.Position < Stream.BaseStream.Length)
@@ -824,12 +835,12 @@ public class PNGDecoder
             }
         }
         stream.Flush();
-        stream.Seek(2, SeekOrigin.Begin);
         return stream;
     }
 
     protected byte[] DecompressData(MemoryStream stream)
     {
+        stream.Seek(2, SeekOrigin.Begin);
         MemoryStream output = new MemoryStream();
         using (DeflateStream deflate = new DeflateStream(stream, CompressionMode.Decompress))
         {
@@ -867,7 +878,7 @@ public class PNGDecoder
             case "IEND":
                 return new PNGEndChunk();
             default:
-                return new PNGChunk();
+                return new PNGUnknownChunk();
         }
     }
     
@@ -924,7 +935,7 @@ public class PNGDecoder
 
         public virtual void PostParse()
         {
-            if (false)//Stream.BaseStream.Position - StartPos < Length || Stream.BaseStream.Position - StartPos > Length)
+            if (Stream.BaseStream.Position - StartPos < Length || Stream.BaseStream.Position - StartPos > Length)
             {
                 throw new PNGException($"PNG Chunk has a length of {Length} bytes, but {Stream.BaseStream.Position - StartPos} were read.");
             }
@@ -993,6 +1004,17 @@ public class PNGDecoder
             Decoder.Compression = Compression;
             Decoder.Filter = Filter;
             Decoder.Interlacing = Interlacing;
+        }
+    }
+
+    protected class PNGUnknownChunk : PNGChunk
+    {
+        public byte[] Data;
+
+        public override void Parse()
+        {
+            Data = Stream.ReadBytes((int) Length);
+            base.Parse();
         }
     }
 
