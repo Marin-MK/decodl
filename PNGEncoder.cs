@@ -20,7 +20,7 @@ public unsafe class PNGEncoder
 
     List<Color> Palette = new List<Color>();
     Dictionary<Color, Color> PaletteReductions = new Dictionary<Color, Color>();
-    List<(string Header, string Data)> CustomChunks = new List<(string Header, string Data)>();
+    List<(string Header, string Data, bool Compressed)> CustomChunks = new List<(string Header, string Data, bool Compressed)>();
 
     /// <summary>
     /// Whether to read the input data as RGBA or as ABGR.
@@ -79,11 +79,11 @@ public unsafe class PNGEncoder
         this.Height = Height;
     }
 
-    public void AddCustomChunk(string Header, string Data)
+    public void AddCustomChunk(string Header, string Data, bool Compressed)
     {
         if (Header.Length != 4) throw new PNGException("Header must be 4 characters long.");
         if (Header[0] < 'a' || Header[0] > 'z') throw new PNGException("Header does not start with lower-case latin character");
-        CustomChunks.Add((Header, Data));
+        CustomChunks.Add((Header, Data, Compressed));
     }
 
     public void Encode(string Filename)
@@ -133,7 +133,10 @@ public unsafe class PNGEncoder
         {
             string hdr = c.Item1;
             string dat = c.Item2;
-            PNGCompressedDataChunk chnk = new PNGCompressedDataChunk(bw, hdr, Compress(Encoding.Default.GetBytes(dat)));
+            bool compr = c.Item3;
+            PNGChunk chnk = null;
+            if (compr) chnk = new PNGCompressedDataChunk(bw, hdr, Compress(Encoding.Default.GetBytes(dat)));
+            else chnk = new PNGUncompressedDataChunk(bw, hdr, dat);
             chnk.Write();
             chnk.Dispose();
         });
@@ -567,13 +570,18 @@ public unsafe class PNGEncoder
         public PNGUncompressedDataChunk(BinaryWriter FileWriter, string Header, string Data)
             : base(Header, FileWriter)
         {
-            ByteData = Encoding.Default.GetBytes(Data);
+            byte[] Bytes = Encoding.Default.GetBytes(Data);
+            ByteData = new byte[Bytes.Length + 4];
+            Array.Copy(Bytes, 0, ByteData, 4, Bytes.Length);
+            ByteData[0] = (byte) ChunkType[0];
+            ByteData[1] = (byte) ChunkType[1];
+            ByteData[2] = (byte) ChunkType[2];
+            ByteData[3] = (byte) ChunkType[3];
         }
 
         public override void Write()
         {
-            FileWriter.Write(UInt32ToBE((uint) ByteData.Length)); // Data length - 4 header bytes
-            FileWriter.Write(ChunkType);
+            FileWriter.Write(UInt32ToBE((uint) ByteData.Length - 4)); // Data length + 4 header bytes
             FileWriter.Write(ByteData);
             FileWriter.Write(UInt32ToBE(Crc32Algorithm.Compute(ByteData)));
         }

@@ -2,6 +2,9 @@
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 
 namespace decodl;
 
@@ -36,7 +39,7 @@ public class PNGDecoder
     public static (byte[] Bytes, int Width, int Height) Decode(string Filename)
     {
         PNGDecoder decoder = new PNGDecoder(Filename);
-        return (decoder.Bytes, decoder.Width, decoder.Height);
+        return decoder.Decode();
     }
 
     public PNGDecoder(string Filename)
@@ -48,6 +51,7 @@ public class PNGDecoder
         this.Stream = Stream;
         TestHeader();
         DecodePNG();
+        this.Stream.Close();
     }
 
     protected void TestHeader()
@@ -60,10 +64,15 @@ public class PNGDecoder
         }
     }
 
+    public bool HasChunk(string Header)
+    {
+        return this.Chunks.Any(c => c.Type == Header);
+    }
+
     public byte[] GetChunk(string Header, bool Decompress)
     {
         PNGChunk chunk = this.Chunks.Find(c => c.Type == Header);
-        if (chunk is not PNGUnknownChunk) throw new Exception("This chunk is already known.");
+        if (chunk is not PNGUnknownChunk) throw new PNGException("This chunk is already known.");
         PNGUnknownChunk c = (PNGUnknownChunk) chunk;
         byte[] Data = c.Data;
         if (!Decompress) return Data;
@@ -78,12 +87,25 @@ public class PNGDecoder
             DecodeChunk();
         }
         ValidatePNG();
+    }
+
+    public (byte[] Bytes, int Width, int Height) Decode(bool Parallelism = true)
+    {
+        return Decode(Environment.ProcessorCount);
+    }
+
+    public (byte[] Bytes, int Width, int Height) Decode(int DegreeOfParllelism)
+    {
         MemoryStream DataChunks = MergeDataChunks();
         byte[] RawBytes = DecompressData(DataChunks);
         Bytes = new byte[Width * Height * 4];
         if (ColorType == ColorTypes.RGBA)
         {
-            if (BitDepth == 8) ConvertRGBA8(RawBytes);
+            if (BitDepth == 8)
+            {
+                if (DegreeOfParllelism != 0) ConvertRGBA8P(RawBytes, DegreeOfParllelism);
+                else ConvertRGBA8(RawBytes);
+            }
             else if (BitDepth == 16) ConvertRGBA16(RawBytes);
             else throw new PNGException($"Unhandled Bit Depth {BitDepth}");
         }
@@ -117,6 +139,7 @@ public class PNGDecoder
             else throw new PNGException($"Unhandled Bit Depth {BitDepth}");
         }
         else throw new PNGException($"Unhandled Color Type {ColorType}");
+        return (Bytes, Width, Height);
     }
 
     protected void ConvertRGBA8(byte[] RawBytes)
@@ -176,6 +199,86 @@ public class PNGDecoder
                 }
             }
         }
+    }
+
+    protected void ConvertRGBA8P(byte[] RawBytes, int ParDegree)
+    {
+        List<(int Start, int End, byte[] Result)> Ops = new List<(int, int, byte[])>();
+        int lasty = 0;
+        for (int y = 0; y < Height; y++)
+        {
+            int filter = RawBytes[y * (Width * 4 + 1)];
+            int nextfilter = y + 1 >= Height ? -1 : RawBytes[(y + 1) * (Width * 4 + 1)];
+            if (nextfilter == 0 || nextfilter == 1 || nextfilter == -1)
+            {
+                Ops.Add((lasty, y, new byte[(y - lasty + 1) * Width * 4]));
+                lasty = y + 1;
+            }
+        }
+
+        Parallel.ForEach(Ops, new ParallelOptions() { MaxDegreeOfParallelism = ParDegree }, op =>
+        {
+            int yoffset = op.Start * Width * 4;
+            for (int y = op.Start; y <= op.End; y++)
+            {
+                int filter = RawBytes[y * (Width * 4 + 1)];
+                for (int x = 0; x < Width; x++)
+                {
+                    int pxidx = y * Width * 4 + x * 4;
+                    int realidx = y * (Width * 4 + 1) + 1 + x * 4;
+                    for (int rgba = 0; rgba < 4; rgba++)
+                    {
+                        byte LeftByte = 0;
+                        byte UpperByte = 0;
+                        byte newvalue = 0;
+                        if (filter == 0)
+                        {
+                            newvalue = RawBytes[realidx + rgba];
+                        }
+                        else if (filter == 1)
+                        {
+                            if (x > 0) LeftByte = op.Result[pxidx - 4 + rgba - yoffset];
+                            newvalue = (byte)((RawBytes[realidx + rgba] + LeftByte) % 256);
+                        }
+                        else if (filter == 2)
+                        {
+                            if (y > 0) UpperByte = op.Result[pxidx - Width * 4 + rgba - yoffset];
+                            newvalue = (byte)((RawBytes[realidx + rgba] + UpperByte) % 256);
+                        }
+                        else if (filter == 3)
+                        {
+                            if (x > 0) LeftByte = op.Result[pxidx - 4 + rgba - yoffset];
+                            if (y > 0) UpperByte = op.Result[pxidx - Width * 4 + rgba - yoffset];
+                            newvalue = (byte)((RawBytes[realidx + rgba] + (byte)Math.Floor((LeftByte + UpperByte) / 2d)) % 256);
+                        }
+                        else if (filter == 4)
+                        {
+                            if (x > 0) LeftByte = op.Result[pxidx - 4 + rgba - yoffset];
+                            if (y > 0) UpperByte = op.Result[pxidx - Width * 4 + rgba - yoffset];
+                            byte UpperLeftByte = 0;
+                            if (x > 0 && y > 0) UpperLeftByte = op.Result[pxidx - Width * 4 - 4 + rgba - yoffset];
+
+                            int Base = LeftByte + UpperByte - UpperLeftByte;
+                            int LeftDiff = Math.Abs(Base - LeftByte);
+                            int UpperDiff = Math.Abs(Base - UpperByte);
+                            int UpperLeftDiff = Math.Abs(Base - UpperLeftByte);
+
+                            byte Paeth = 0;
+                            if (LeftDiff <= UpperDiff && LeftDiff <= UpperLeftDiff) Paeth = LeftByte;
+                            else if (UpperDiff <= UpperLeftDiff) Paeth = UpperByte;
+                            else Paeth = UpperLeftByte;
+                            newvalue = (byte)((RawBytes[realidx + rgba] + Paeth) % 256);
+                        }
+                        else throw new PNGException($"PNG invalid filter type {filter}.");
+                        op.Result[pxidx + rgba - yoffset] = newvalue;
+                    }
+                }
+            }
+        });
+        Ops.ForEach(op =>
+        {
+            Array.Copy(op.Result, 0, Bytes, op.Start * Width * 4, op.Result.Length);
+        });
     }
 
     protected void ConvertRGBA16(byte[] RawBytes)
@@ -849,6 +952,7 @@ public class PNGDecoder
         }
         byte[] data = output.ToArray();
         output.Dispose();
+        stream.Dispose();
         return data;
     }
 
