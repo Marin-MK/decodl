@@ -1,27 +1,29 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>Library</OutputType>
-    <TargetFramework>net7.0</TargetFramework>
-    <StartupObject></StartupObject>
-    <Configurations>Debug;Release</Configurations>
-    <Platforms>x64</Platforms>
-    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
-    <Authors>Marijn Herrebout</Authors>
-    <Copyright>Marijn Herrebout</Copyright>
-    <RepositoryUrl>https://github.com/Marin-MK/decodl</RepositoryUrl>
-  </PropertyGroup>
+    <PropertyGroup>
+        <OutputType>Library</OutputType>
+        <TargetFramework>net7.0</TargetFramework>
+        <StartupObject></StartupObject>
+        <Configurations>Debug;Release</Configurations>
+        <Platforms>x64</Platforms>
+        <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+        <Authors>Marijn Herrebout</Authors>
+        <Copyright>Marijn Herrebout</Copyright>
+        <RepositoryUrl>https://github.com/Marin-MK/decodl</RepositoryUrl>
+    </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <Optimize>False</Optimize>
-  </PropertyGroup>
+    <PropertyGroup Condition="'$(Configuration)'=='Debug'">
+        <Optimize>False</Optimize>
+	    <OutputPath>build/Debug</OutputPath>
+    </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <Optimize>False</Optimize>
-  </PropertyGroup>
+    <PropertyGroup Condition="'$(Configuration)'=='Release'">
+        <Optimize>True</Optimize>
+	    <OutputPath>build/Release</OutputPath>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Crc32.NET" Version="1.2.0" />
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Crc32.NET" Version="1.2.0" />
+    </ItemGroup>
 
 </Project>
