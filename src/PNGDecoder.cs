@@ -958,8 +958,8 @@ public class PNGDecoder
     protected PNGChunk CreateChunk(int ChunkNumber, string Type)
     {
         if (ChunkNumber == 1 && Type != "IHDR") throw new PNGException($"PNG first chunk must be of type IHDR, but got {Type} intead.");
-        if (Type != "IDAT" && Type != "IEND" && Type != "tIME" && Type != "iTXt" && Type != "tEXt" && Type != "zTXt" && SeenData)
-            throw new PNGException($"PNG data chunks cannot be interrupted by a chunk of type {Type}.");
+        //if (Type != "IDAT" && Type != "IEND" && Type != "tIME" && Type != "iTXt" && Type != "tEXt" && Type != "zTXt" && SeenData)
+        //    throw new PNGException($"PNG data chunks cannot be interrupted by a chunk of type {Type}.");
         switch (Type)
         {
             case "IHDR":
